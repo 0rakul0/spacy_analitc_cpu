@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pyspark
 import urllib
+from flashtext.keyword import KeywordProcessor
 from pyspark.shell import spark
 from pyspark.sql.functions import *
 from pyspark.ml.classification import *
@@ -139,7 +140,6 @@ class Extrator_spark():
 
         return self.cria_lista_de_linhas_mantendo_separador(arquivo, lista_expressoes_ignoradas, separador)
 
-
     def cria_lista_de_linhas_mantendo_separador(self,arquivo, lista_expressoes_ignoradas, separador):
         # Separa o arquivo por blocos de acordo com o separador
 
@@ -189,7 +189,6 @@ class Extrator_spark():
                         lista_de_linhas.pop(pos + 1)
                     else:
                         npu = False
-
             novas_linhas = []
 
             # For para mesclar a posição i+1 com a posição i, onde i é o texto e i+1 é o npu
@@ -230,13 +229,148 @@ class Extrator_spark():
         # Retorna assuntos
         return matches_rdd
 
-    def lista_regex(self, texto):
+    def matches_de_marcador(self, texto):
         doc = self.nlp(texto)
-        # Imprimir a frase completa
-        print("Frase:", doc.text)
+        entidades = [entidade.label_ for entidade in doc.ents]
 
-        # Iterar pelas entidades encontradas no texto
-        for entidade in doc.ents:
-            print("Entidade:", entidade.text, "Rótulo:", entidade.label_)
+        if not entidades:
+            entidades.append('NAO_CLASSIFICADO')
 
+        return entidades
+    def conecta_jdbc_assunto(self):
+        keyword_processor_traco = KeywordProcessor()
+        keyword_processor_condominio = KeywordProcessor()
+        assuntos_broadcast = None
+        try:
+            assuntosDF = spark.read \
+                .format("jdbc") \
+                .option("driver", "org.postgresql.Driver") \
+                .option("url", "--") \
+                .option("dbtable", "airflow.assunto") \
+                .option("user", "airflow") \
+                .option("password", "airflow") \
+                .load()
+            print("conexao ok")
+            assuntos_broadcast = self.sc.broadcast(
+                assuntosDF.select(assuntosDF['nome']).rdd.flatMap(lambda x: x).collect())
+            
+        except Exception as e:
+            print(f'falha na conexao: {e}')
 
+        if assuntos_broadcast:
+            for assunto in assuntos_broadcast.value:
+                keyword_processor_traco.add_keyword('- ' + assunto + ' -')
+
+        keyword_processor_condominio.add_keyword('- PROCEDIMENTO SUMARIO COB CONDOMINIO -', 'COBRANCA CONDOMINIO')
+        keyword_processor_condominio.add_keyword(' - PRO-  CEDIMENTO SUMARIO COB CONDOMINIO -', 'COBRANCA CONDOMINIO')
+        keyword_processor_condominio.add_keyword('- PROCEDIMENTO SUMARIO COBRANCA CONDOMINIO -', 'COBRANCA CONDOMINIO')
+        keyword_processor_condominio.add_keyword(' - PRO-  CEDIMENTO SUMARIO COBRANCA CONDOMINIO -',
+                                                 'COBRANCA CONDOMINIO')
+        keyword_processor_condominio.add_keyword('- PROCEDIMENTO ORDINARIO COB CONDOMINIO -', 'COBRANCA CONDOMINIO')
+        keyword_processor_condominio.add_keyword(' - PRO-  CEDIMENTO ORDINARIO COB CONDOMINIO -', 'COBRANCA CONDOMINIO')
+        keyword_processor_condominio.add_keyword('- PROCEDIMENTO ORDINARIO COBRANCA CONDOMINIO -',
+                                                 'COBRANCA CONDOMINIO')
+        keyword_processor_condominio.add_keyword(' - PRO-  CEDIMENTO ORDINARIO COBRANCA CONDOMINIO -',
+                                                 'COBRANCA CONDOMINIO')
+        return keyword_processor_condominio, keyword_processor_traco
+
+    def matches_de_interesse_com_texto_e_assunto_e_marcador(self,
+            tupla):  # Recorta as informações de interesse do bloco e retorna para um novo rdd
+        keyword_processor_condominio, keyword_processor_traco = self.conecta_jdbc_assunto()
+        t = time.perf_counter()
+
+        match_caderno = re.search("(DJSP.*?)_(\d{4}_\d{2}_\d{2})\.TXT", tupla[0].upper())
+        npu = re.search(
+            '(\\b\d{7}\s*\-\s*?\d{2}\s*\.\s*\d{4}\s*\.\s*\d\s*\.\s*\d{2}\s*\.\s*\d{4}|\\b\d{7}\s*\-\s*?\d{2}\s*\.\s*\d{4}\s*\.\s*\d{3}\s*\.\s*\d{4}|\\b\d{3}\s*\.\s*\d{2}\s*\.\s*\d{6}\s*\-\s*\d|\\b\d{4}\s*\-\s*\d{2}\s*\.\s*\d{4}\s*\.\s*\d\s*\.\s*\d{2}\s*\.\s*\d{4}|\\b\d{4}\s*\.\s*\d{2}\s*\.\s*\d{2}\s*\.\s*\d{6}\s*\-\s*\d|\\b\d{3}\s*\-\s*\d{2}\s*\.\s*\d{4}\s*\.\s*\d\s*\.\s*\d{2}\s*\.\s*\d{4}|\\b\d{5}\s*\-\s*\d{2}\s*\.\s*\d{4}\s*\.\s*\d\s*\.\s*\d{2}\s*\.\s*\d{4}|\\b\d{7}\s*\-\s*\d\/\d|\\b\d{3}\s*\.\s*\d{2}\s*\.\s*\d{4}\s*\.\s*\d{6})',
+            tupla[1])
+        npu = npu.group(0) if npu else ''
+        caderno = match_caderno.group(1) if match_caderno else None
+        data = datetime.datetime.strptime(match_caderno.group(2).replace('_', '-'),
+                                          '%Y-%m-%d') if match_caderno else None
+        match_inicio_bloco = ''
+
+        if tupla[1]:
+            texto = tupla[1].replace(';', ' ')
+        else:
+            texto = None
+        lista_assunto = None
+        if texto:
+            lista_assunto = []
+            match_inicio_bloco = re.search('^.{1,200}', texto)
+            match_inicio_bloco_limpo = re.sub('(\(.*?\))\s+(\(.*?\))', r'\g<1> -', match_inicio_bloco.string)
+            match_inicio_bloco_limpo = re.sub('(\(.{25,60}?(?:)|\s-)\)', '-', match_inicio_bloco_limpo)
+            match_inicio_bloco_limpo = self.remove_varios_espacos(match_inicio_bloco_limpo)
+            match_inicio_bloco_limpo = re.sub('[,$;<>\/\:\!\+\_\=\@\#\%\(\)\[\]\.]', ' ', match_inicio_bloco_limpo)
+            match_inicio_bloco_limpo = self.remove_varios_espacos(match_inicio_bloco_limpo)
+            match_assunto = keyword_processor_traco.extract_keywords(match_inicio_bloco_limpo)
+
+            if not match_assunto:
+                match_assunto = keyword_processor_condominio.extract_keywords(match_inicio_bloco_limpo)
+
+            lista_assunto.append(match_assunto)
+        lista_marcador = self.matches_de_marcador(texto)
+        elapsed = time.perf_counter() - t
+        print(f'Time   {elapsed:0.4}')
+
+        return npu, texto, caderno, data, lista_assunto, lista_marcador, False, "assunto_sentenca_teste_2023_jefferson"
+
+    def toCSVLine(self, data):  # Método para criar separadores csv na lista
+        return ';'.join(str(d) for d in data)
+
+    def estrutura_spark_banco(self):
+        schema = StructType([
+            StructField("npu", StringType(), True),
+            StructField("bloco_texto", StringType(), True),
+            StructField("caderno", StringType(), True),
+            StructField("data_caderno", DateType(), True),
+            StructField("lista_generica", ArrayType(StringType()), True),
+            StructField("lista_marcador", ArrayType(StringType()), True),
+            StructField("processado", BooleanType(), False),
+            StructField("projeto", StringType(), False)
+        ])
+        jdbc = "jdbc:--"
+        tabela = 'airflow.tabela_spark'
+        credenciais = {"user": "airflow", "password": "airflow"}
+        return schema, jdbc, tabela, credenciais
+
+if __name__ == "__main__":
+    es = Extrator_spark()
+    agora = datetime.datetime.now()
+    current_year = agora.year
+    current_month = agora.month
+    meses = ['12']
+    bucket = 'djsp'
+    ano = '2022'
+
+    for ano in range(2022):
+        out = es.sc.parallelize([])
+        for mes in meses:
+            if current_year == ano and current_month == int(mes):
+                break
+
+            # Cria RDD com o resultado do cria_lista_de_linhas e transforma em lista de tuplas
+            lista_tuplas_matches_rdd = es.extrai_and_return_rdd(bucket, '2022', mes).map(
+                es.cria_lista_de_tuplas_arquivo_bloco)
+
+            # Transforma possíveis lista de lista em uma só lista
+            lista_tuplas_matches_flat = lista_tuplas_matches_rdd.flatMap(lambda x: x)
+
+            # Retorna apenas os blocos contendo a palavra chave em um novo RDD
+            lista_tupla_matches_filtered = lista_tuplas_matches_flat.filter(es.filtragem)
+
+            # Recorta o bloco em assunto necessita de filtragem antes
+            recorte_matches = lista_tupla_matches_filtered.map(es.matches_de_interesse_com_texto_e_assunto_e_marcador)
+
+            # Filtragem de processos por ano req
+            # recorte_matches_por_ano = recorte_matches.filter(filtragem_por_ano)
+
+            # Necessário para o spark unir os resultados de todos os cadernos
+            out = out.union(recorte_matches)
+        schema, jdbc, tabela, credenciais = es.estrutura_spark_banco()
+        df = out.toDF(schema)
+        df.write.mode('append').jdbc(jdbc, tabela, properties=credenciais)
+
+    out.cache()
+    out.map(es.toCSVLine).saveAsTextFile(f"./resultado/{bucket}/DJSP_blocos_{ano}.csv")
+
+    es.sc.stop()  # Derruba o cluster. Usar ao sair
