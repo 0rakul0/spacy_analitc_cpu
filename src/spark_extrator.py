@@ -46,7 +46,7 @@ class Extrator_spark():
         print('****************')
         return sc, spark
     def modelo_nlp(self):
-        nlp = spacy.load("./modelo_treinado")
+        nlp = spacy.load("../modelo_treinado")
         return nlp
 
     def remove_acentos(self,txt):

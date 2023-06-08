@@ -9,9 +9,9 @@ from spacy.util import minibatch
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 try:
-    load_modelo = spacy.load("./modelo_treinado")
+    load_modelo = spacy.load("../modelo_treinado")
     if load_modelo:
-        nlp = spacy.load("./modelo_treinado")
+        nlp = spacy.load("../modelo_treinado")
 except:
     # Comece com o modelo em branco de spaCy
     nlp = spacy.blank('pt')
@@ -59,12 +59,16 @@ def find_tag(text):
     if match_agravo:
         start, end = match_agravo.span()
         return (start, end, 'AGRAVO ADMITIDO')
+    match_com_merito = re.search(r'\bagrav[oa].*?admitid[oa]|\badmitid[oa].*?agrav[oa]\b|interpos.*?tempestiv[oa]', text, re.I)
+    if match_com_merito:
+        start, end = match_com_merito.span()
+        return (start, end, 'COM_MERITO_NAO_ESPECIFICADO')
 
 
 TRAIN_DATA= []
 for texto in DETECT_NOTS:
-    correcao = texto,{'entities': [find_tag(texto)]}
-    TRAIN_DATA.append(tuple(correcao))
+    tag = texto,{'entities': [find_tag(texto)]}
+    TRAIN_DATA.append(tuple(tag))
 
 # Treine por 10 iterações
 for itn in range(20):
