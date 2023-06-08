@@ -1,4 +1,6 @@
 import re
+
+import spacy
 from unicodedata import normalize
 import time
 import datetime
@@ -24,17 +26,28 @@ from pyspark.sql.types import * # data types do Spark SQL
 import sys
 
 from pyspark.sql.functions import *
-# start Spark session
 
-spark = pyspark.sql.SparkSession.builder.appName('Iris').getOrCreate()
-
-# print runtime versions
-print('****************')
-print('Python version: {}'.format(sys.version))
-print('Spark version: {}'.format(spark.version))
-print('****************')
 
 class Extrator_spark():
+    def __init__(self):
+        self.sc, self.spark = self.inicia_spark()
+        self.nlp = self.modelo_nlp()
+
+    def inicia_spark(self):
+        # start Spark session
+        sc = SparkContext.getOrCreate()
+        spark = SparkSession.builder.appName('Extrator_senteca_assunto').getOrCreate()
+        spark.conf.set("spark.sql.repl.eagerEval.enabled", True)
+        # print runtime versions
+        print('****************')
+        print('Python version: {}'.format(sys.version))
+        print('Spark version: {}'.format(spark.version))
+        print('****************')
+        return sc, spark
+    def modelo_nlp(self):
+        nlp = spacy.load("./modelo_treinado")
+        return nlp
+
     def remove_acentos(self,txt):
         if not txt:
             return txt
@@ -80,8 +93,6 @@ class Extrator_spark():
             re.IGNORECASE)
         lista_expressoes_ignoradas.append(expressao_rodape2)
 
-        #     expressao_cabecalho2 = re.compile(r'(PUBLICACAO\s*O\s*F\s*I\s*C\s*I\s*A\s*L\s*DO\s*TRIBUNAL\s*DE\s*JUSTICA\s*DO\s*.*?\s*DISPONIBILIZACAO\s*:\s*.{0,9}?\-?FEIRA\s*\,?\s*\d+\s*DE\s*.*?\s*DIARIO\s*DA\s*JUSTICA\s*.*?\s*PARTE\s*\w+\s*.*?\s*EDICAO(?:\s*\d+)+)', re.IGNORECASE)
-        # expressao_cabecalho2 = re.compile(r'(PUBLICACAO\s*O\s*F\s*I\s*C\s*I\s*A\s*L\s*DO\s*TRIBUNAL\s*DE\s*JUSTICA\s*DO\s*ESTADO\s*DE\s*SAO\s*PAULO.*?LEI\s*FEDERAL\s*N.?\s*\d*\.?\d*\/\d*.?\s*ART.?\s*\d*.?\s*DISPONIBILIZACAO\s*:\s*.{0,9}?\-?FEIRA\s*\,?\s*\d+\s*DE\s*.*?\s*DIARIO\s*DA\s*JUSTICA\s*.*?\s*PARTE\s*\w+\s*.*?\s*EDICAO(?:\s*\d+)+)', re.IGNORECASE)
         expressao_cabecalho2 = re.compile(
             r'(PUBLICACAO\s*O\s*F\s*I\s*C\s*I\s*A\s*L\s*DO\s*TRIBUNAL\s*DE\s*JUSTICA\s*DO\s*ESTADO\s*DE\s*SAO\s*PAULO.{0,40}LEI FEDERAL\s*N.?\s*\d*\.?\d*\/\d*.?\s*ART.?\s*\d*.?\s*DISPONIBILIZACAO\s*:\s*.{0,9}?\-?FEIRA\s*\,?\s*\d+\s*DE\s*.{0,50}\s*DIARIO\s*DA\s*JUSTICA\s*.{0,100}\s*PARTE\s*\w+\s*.{0,60}\s*EDICAO(?:\s*\d+)+)',
             re.IGNORECASE)
@@ -188,11 +199,7 @@ class Extrator_spark():
                         novas_linhas.append(f'{linha} {lista_de_linhas[pos + 1]}')
                     except:
                         continue
-
-            # lista_de_linhas = list(map(lambda linha: linha.upper(), lista_de_linhas))
-            # return (nome_arquivo,lista_de_linhas)
             return (nome_arquivo, novas_linhas)
-
         return ('', '')
 
     def cria_lista_de_tuplas_arquivo_bloco(self,rdd):
@@ -207,7 +214,7 @@ class Extrator_spark():
 
         try:
             # allInOneRDD = sc.wholeTextFiles("data/").flatMap(lambda l:[line+","+f for line in c.splitlines()])
-            arquivos = sc.wholeTextFiles(f"./temp/{bucket}/{ano}/{mes}", 2)
+            arquivos = self.sc.wholeTextFiles(f"./temp/{bucket}/{ano}/{mes}", 2)
         except Py4JJavaError as e:
             print('Pasta não encontrada', e)
             return []
@@ -223,5 +230,13 @@ class Extrator_spark():
         # Retorna assuntos
         return matches_rdd
 
-    def lista_regex(self):
-        lista_regex_sentencas = []
+    def lista_regex(self, texto):
+        doc = self.nlp(texto)
+        # Imprimir a frase completa
+        print("Frase:", doc.text)
+
+        # Iterar pelas entidades encontradas no texto
+        for entidade in doc.ents:
+            print("Entidade:", entidade.text, "Rótulo:", entidade.label_)
+
+

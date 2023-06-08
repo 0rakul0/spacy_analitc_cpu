@@ -6,7 +6,6 @@ nlp = spacy.load("./modelo_treinado")
 # Texto de exemplo para validação
 texto = "As partes celebraram um acordo de conciliação para resolver a disputa de forma amigável."
 
-
 # Aplicar o modelo no texto
 doc = nlp(texto)
 
