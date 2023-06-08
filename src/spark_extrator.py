@@ -253,7 +253,7 @@ class Extrator_spark():
             print("conexao ok")
             assuntos_broadcast = self.sc.broadcast(
                 assuntosDF.select(assuntosDF['nome']).rdd.flatMap(lambda x: x).collect())
-            
+
         except Exception as e:
             print(f'falha na conexao: {e}')
 
