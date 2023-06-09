@@ -1,5 +1,4 @@
 import re
-
 import spacy
 from unicodedata import normalize
 import time
@@ -45,6 +44,7 @@ class Extrator_spark():
         print('Spark version: {}'.format(spark.version))
         print('****************')
         return sc, spark
+
     def modelo_nlp(self):
         nlp = spacy.load("../modelo_treinado")
         return nlp
@@ -150,9 +150,7 @@ class Extrator_spark():
 
             linhas = ''.join(linhas).split('\n')
             linhas = list(map(lambda linha: self.remove_acentos(linha).upper(), linhas))
-
-            linhas = list(filter(lambda linha: linha != '',
-                                 list(map(lambda linha: self.remove_varios_espacos(re.sub('\s*\n|\t', '', linha)), linhas))))
+            linhas = list(filter(lambda linha: linha != '', list(map(lambda linha: self.remove_varios_espacos(re.sub('\s*\n|\t', '', linha)), linhas))))
             linhas = list(map(lambda linha: linha + ' SEPARDOR_BLOCO ', linhas))
 
             # linhas = list(map(lambda x:x.replace('\n',' '), linhas))
@@ -173,10 +171,7 @@ class Extrator_spark():
                                        list(filter(lambda linha: linha is not None, lista_de_linhas))))[1:]
             lista_de_linhas = list(filter(lambda linha: linha != ' ', lista_de_linhas))
             lista_de_linhas = list(filter(lambda linha: linha != ' (', lista_de_linhas))
-            lista_de_linhas = list(filter(
-                lambda linha: linha != re.search('\A\/\d{2}\s*\(\s*$', linha).group(0) if re.search('\A\/\d{2}\s*\(\s*$',
-                                                                                                    linha) else ' ',
-                lista_de_linhas))
+            lista_de_linhas = list(filter(lambda linha: linha != re.search('\A\/\d{2}\s*\(\s*$', linha).group(0) if re.search('\A\/\d{2}\s*\(\s*$', linha) else ' ', lista_de_linhas))
             lista_de_linhas = list(filter(lambda linha: len(linha) > 3, lista_de_linhas))
 
             regex_npu = re.compile(

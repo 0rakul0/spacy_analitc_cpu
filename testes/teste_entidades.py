@@ -1,21 +1,27 @@
 import spacy
 
-# Carregar o modelo treinado
-nlp = spacy.load("../modelo_treinado")
+def process_text(text):
+    # Carregar o modelo treinado
+    modelo_treinado = "../modelo_treinado"
+    nlp = spacy.load(modelo_treinado)
+
+    # Aplicar o modelo no texto
+    doc = nlp(text)
+
+    tags = []
+
+    # Iterar pelas entidades encontradas no texto
+    for entidade in doc.ents:
+        tags.append(entidade.label_)
+
+    return tags
 
 # Texto de exemplo para validação
-texto = "As partes celebraram um acordo de conciliação para resolver a disputa de forma amigável."
+texto = "Foi interposto agravo contra a decisão do juiz, mas as partes resolveram suas diferenças e celebraram um acordo extrajudicialmente."
 
-# Aplicar o modelo no texto
-doc = nlp(texto)
+# Processar o texto e obter as tags
+tags = process_text(texto)
 
-# Imprimir a frase completa
-print("Frase:", doc.text)
-
-# Iterar pelas entidades encontradas no texto
-for entidade in doc.ents:
-    print("Entidade:", entidade.text)
-    print("Início:", entidade.start)
-    print("Fim:", entidade.end)
-    print("Rótulo:", entidade.label_)
-    print("---")
+# Imprimir as tags encontradas
+tags_str = ", ".join(tags)
+print( texto, "|", tags_str, "|")

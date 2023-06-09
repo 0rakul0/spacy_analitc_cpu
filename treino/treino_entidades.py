@@ -1,7 +1,6 @@
 import os
 import random
 import re
-
 import spacy
 from spacy.training import Example
 from spacy.util import minibatch
@@ -16,6 +15,20 @@ except:
     # Comece com o modelo em branco de spaCy
     nlp = spacy.blank('pt')
 
+# No exemplo, a string contém o texto e o dicionário contém as entidades
+DETECT_NOTS = []
+caminho_arquivo = '../src/corpus_modelos_frases.txt'
+
+# Abre o arquivo em modo de leitura
+with open(caminho_arquivo, "r", encoding='utf-8') as arquivo:
+    # Lê cada linha do arquivo
+    linhas = arquivo.readlines()
+    for linha in linhas:
+        # Remove espaços em branco e quebras de linha
+        linha = linha.strip()
+        if linha:
+            # Adiciona a linha à lista DETECT_NOTS
+            DETECT_NOTS.append(linha)
 
 # Crie o pipeline 'ner'
 if "ner" not in nlp.pipe_names:
@@ -34,41 +47,24 @@ ner.add_label('ACORDO')
 # Inicie o treinamento
 nlp.begin_training()
 
-# Exemplo de dados de treinamento: uma lista de tuplas, onde cada tupla é um exemplo.
-# No exemplo, a string contém o texto e o dicionário contém as entidades
-DETECT_NOTS = []
-caminho_arquivo = './corpus_modelos_frases.txt'
-
-# Abre o arquivo em modo de leitura
-with open(caminho_arquivo, "r", encoding='utf-8') as arquivo:
-    # Lê cada linha do arquivo
-    linhas = arquivo.readlines()
-    for linha in linhas:
-        # Remove espaços em branco e quebras de linha
-        linha = linha.strip()
-        if linha:
-            # Adiciona a linha à lista DETECT_NOTS
-            DETECT_NOTS.append(linha)
-
-def find_tag(text):
+def find_tags(text):
+    entities = []
     match_acordo = re.search(r'\bacordo(s|am|ram)?\b', text, re.I)
     if match_acordo:
         start, end = match_acordo.span()
-        return (start, end, 'ACORDO')
-    match_agravo = re.search(r'\bagrav[oa].*?admitid[oa]|\badmitid[oa].*?agrav[oa]\b|interpos.*?tempestiv[oa]', text, re.I)
-    if match_agravo:
-        start, end = match_agravo.span()
-        return (start, end, 'AGRAVO ADMITIDO')
-    match_com_merito = re.search(r'\bagrav[oa].*?admitid[oa]|\badmitid[oa].*?agrav[oa]\b|interpos.*?tempestiv[oa]', text, re.I)
-    if match_com_merito:
-        start, end = match_com_merito.span()
-        return (start, end, 'COM_MERITO_NAO_ESPECIFICADO')
+        entities.append((start, end, 'ACORDO'))
+    match_agravo_admitido = re.search(r'\bagrav[oa]\b|\bagrav[oa].*?admitid[oa]|\badmitid[oa].*?agrav[oa]\b|interpos.*?tempestiv[oa]', text, re.I)
+    if match_agravo_admitido:
+        start, end = match_agravo_admitido.span()
+        entities.append((start, end, 'AGRAVO_ADMITIDO'))
+    return entities
 
-
-TRAIN_DATA= []
+TRAIN_DATA = []
 for texto in DETECT_NOTS:
-    tag = texto,{'entities': [find_tag(texto)]}
-    TRAIN_DATA.append(tuple(tag))
+    tags = find_tags(texto)
+    annotations = {'entities': tags}
+    example = (texto, annotations)
+    TRAIN_DATA.append(example)
 
 # Treine por 10 iterações
 for itn in range(20):
@@ -89,4 +85,4 @@ for itn in range(20):
 
     print("Perdas:", losses)
 
-nlp.to_disk("./modelo_treinado")
+nlp.to_disk("../modelo_treinado")
