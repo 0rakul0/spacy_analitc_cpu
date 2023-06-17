@@ -17,7 +17,7 @@ def process_text(text):
     return tags
 
 # Texto de exemplo para validação
-texto = "Foi concedido o agravo admitido, e posteriormente as partes firmaram um acordo judicial."
+texto = "O juiz admitiu o agravo e determinou uma audiência de conciliação, resultando em um acordo"
 
 # Processar o texto e obter as tags
 tags = process_text(texto)

@@ -42,8 +42,8 @@ etiqueta_nova = 'NOVO_ROTULO'
 ner.add_label(etiqueta_nova)
 """
 ner.add_label('CONCILIACAO')
-# ner.add_label('AGRAVO_ADMITIDO')
-# ner.add_label('ACORDO')
+ner.add_label('AGRAVO_ADMITIDO')
+ner.add_label('ACORDO')
 ner.add_label('ALIMENTO')
 ner.add_label('TUTELA')
 ner.add_label('SENTENCA')
@@ -61,12 +61,12 @@ def find_tags(text):
     match_tutela = re.search(r'pedido de tutela', text, re.I)
     match_sentenca = re.search(r'senten.a|senten.a\scondenat.ria|execu..o\sda\spena|Execu..o\sPenal', text, re.I)
     match_saida_preso = re.search(r'\(Lei\s+7\.210\/84\)|SA.DA\s+TEMPOR.RIA', text, re.I)
-    # if match_acordo:
-    #     start, end = match_acordo.span()
-    #     entities.append((start, end, 'ACORDO'))
-    # if match_agravo_admitido:
-    #     start, end = match_agravo_admitido.span()
-    #     entities.append((start, end, 'AGRAVO_ADMITIDO'))
+    if match_acordo:
+        start, end = match_acordo.span()
+        entities.append((start, end, 'ACORDO'))
+    if match_agravo_admitido:
+        start, end = match_agravo_admitido.span()
+        entities.append((start, end, 'AGRAVO_ADMITIDO'))
     if match_concilicacao:
         start, end = match_concilicacao.span()
         entities.append((start, end, 'CONCILIACAO'))
