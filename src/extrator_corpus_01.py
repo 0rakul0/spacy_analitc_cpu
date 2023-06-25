@@ -10,7 +10,7 @@ def extrair_texto_depois(corpus):
     texto_formatado = []
     bloco = ""
     for linha in texto:
-        if re.match(r"\d{4,5}\s+.\s+\d{11}\s.\d|\d{4,5}.*\d{6}\s\d{5}.*\d|\d{4,5}.\-.\d{10}\s\d\-\d|PROC.\:\s\d{2}.*\d{6}.*\d|EDITAL\s+DE|EDITAL\s+DO", linha):
+        if re.match(r"\d{4,5}\s+.\s+\d{11}\s.\d|\d{4,5}.*\d{6}\s\d{5}.*\d|\d{4,5}.\-.\d{10}\s\d\-\d|PROC.\:\s\d{2}.*\d{6}.*\d|EDITAL\s+DE|EDITAL\s+DO|ELEITORAL\s", linha):
             if bloco:
                 texto_formatado.append(bloco.strip())
             bloco = linha
